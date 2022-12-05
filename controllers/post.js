@@ -1,3 +1,4 @@
+const Friend = require("../models/friend");
 const Post = require("../models/post");
 const CustomError = require("../utils/CustomError");
 
@@ -35,7 +36,7 @@ exports.getAllPosts = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      message: `${posts.length > 1 ? "Posts Found" : "No Posts Found"}`,
+      message: posts.length > 0 ? "Posts Found" : "No Posts Found",
       posts,
     });
   } catch (error) {
@@ -156,67 +157,101 @@ exports.addComment = async (req, res, next) => {
 };
 
 //removeComment //TODO: comment creator or post owner can remove
-exports.removeComment = async(req,res,next) =>{
-    const userId = req.user.id;
-    const postId = req.params.postId;
-    const commentId = req.params.commentId;
+exports.removeComment = async (req, res, next) => {
+  const userId = req.user.id;
+  const postId = req.params.postId;
+  const commentId = req.params.commentId;
 
-    try {
-        let post = await Post.findById(postId);
+  try {
+    let post = await Post.findById(postId);
 
-        if(!post){
-            return next(CustomError.badRequest(`Post does not exist`))
-        }
-
-        post.comments = post.comments.filter(comment => comment._id.toString() !== commentId)
-
-        post = await post.save();
-
-        return res.status(200).json({
-            success: true,
-            message: `Comment removed`,
-            post
-        })
-        
-    } catch (error) {
-        return next(error)
+    if (!post) {
+      return next(CustomError.badRequest(`Post does not exist`));
     }
-}
+
+    post.comments = post.comments.filter(
+      (comment) => comment._id.toString() !== commentId
+    );
+
+    post = await post.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Comment removed`,
+      post,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 //updateComment
-exports.updateComment = async(req,res,next) =>{
+exports.updateComment = async (req, res, next) => {
+  const userId = req.user.id;
+  const postId = req.params.postId;
+  const commentId = req.params.commentId;
 
-    const userId = req.user.id;
-    const postId = req.params.postId;
-    const commentId = req.params.commentId;
+  const { text } = req.body;
 
-    const {text} = req.body;
+  try {
+    let post = await Post.findById(postId);
 
-    try {
-        let post = await Post.findById(postId);
-
-        if(!post){
-            return next(CustomError.badRequest(`Post doesn't exist`))
-        }
-
-        post.comments = post.comments.map(comment => {
-            if(comment._id.toString() === commentId){
-                comment.text = text;
-            }
-            return comment;
-        })
-
-        post = await post.save();
-
-        return res.status(200).json({
-            success: true,
-            message: 'Comment updated',
-            post
-        })
-    } catch (error) {
-        return next(error)
+    if (!post) {
+      return next(CustomError.badRequest(`Post doesn't exist`));
     }
-}
+
+    post.comments = post.comments.map((comment) => {
+      if (comment._id.toString() === commentId) {
+        comment.text = text;
+      }
+      return comment;
+    });
+
+    post = await post.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Comment updated",
+      post,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// trending post
+// public,friends, last 7 days, most likes, top 4, descending
+exports.trendingPost = async (req, res, next) => {
+  const userId = req.user.id;
+
+  try {
+    const { friends } = await Friend.findOne({ user: userId });
+
+    // const posts = await Post.find({
+    //   user: { $in: [userId, ...friends.map((friend) => friend.user)] },
+    // })
+    // .limit(4)
+    // .populate("user", "name username profilePicUrl")
+    // .populate('likes.user', 'name username' )
+    // .populate('comments.user', 'name username profilePicUrl')
+
+    // const posts = await Post.aggregate([
+    //   { $match: { "user": { $in: [userId, ...friends.map((friend) => friend.user)] } } },
+    // ]).populate().populate("user", "name username profilePicUrl")
+    // .populate('likes.user', 'name username' )
+    // .populate('comments.user', 'name username profilePicUrl')
+    // .limit(4)
+    
+
+    return res.status(200).json({
+      success: true,
+      message: 'Trending posts found',
+      posts
+    })
+  } catch (error) {
+    return next(error)
+  }
+};
 
 //isFriend
 //isPublic
