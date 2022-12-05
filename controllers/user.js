@@ -5,6 +5,7 @@ const Friend = require("../models/friend");
 const mailer = require("../utils/mailer");
 const crypto = require("crypto");
 const { futureDateGenerate } = require("../utils/dateUtil");
+const { default: mongoose } = require("mongoose");
 
 //sign up
 //TODO: send verification mail to user on sign up
@@ -137,7 +138,7 @@ exports.login = async (req, res, next) => {
   }
 };
 
-// get user
+// get user - self
 exports.getUser = async (req, res, next) => {
   const userId = req.user.id;
 
@@ -164,7 +165,7 @@ exports.getUser = async (req, res, next) => {
   }
 };
 
-//update user
+//update user - self
 //TODO: on updating email, change isVerified to false, logout the user and ask user to verify the new email
 exports.updateUser = async (req, res, next) => {
   const userId = req.user.id;
@@ -198,6 +199,35 @@ exports.updateUser = async (req, res, next) => {
         )
       );
     }
+    return next(error);
+  }
+};
+
+// get user - by id
+exports.getUserById = async (req, res, next) => {
+  const userId = req.params.userId;
+
+  if (!userId) {
+    return next(CustomError.badRequest("Please provide user id"));
+  }
+
+  try {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return next(
+        CustomError.badRequest("User with provided ID does not exists")
+      );
+    }
+
+    user.password = undefined;
+
+    return res.status(200).json({
+      success: true,
+      message: "User found",
+      user,
+    });
+  } catch (error) {
     return next(error);
   }
 };
@@ -323,12 +353,15 @@ exports.perfPasswordReset = async (req, res, next) => {
 };
 
 // get all users
-// @Output: all users, except admin
+// @Output: all users, except admin and self
 exports.getAllUser = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    const users = await User.find({ role: { $ne: "admin" } }).sort({
+    const users = await User.find(
+      { role: { $ne: "admin" }, _id: { $ne: userId } },
+      { name: 1, email: 1, username: 1, profilePicUrl: 1 }
+    ).sort({
       createdAt: -1,
     });
 
@@ -348,8 +381,8 @@ exports.deleteUser = async (req, res, next) => {
   try {
     const user = await User.findByIdAndDelete(userId);
 
-    if(!user){
-      return next(CustomError.badRequest('User does not exists'))
+    if (!user) {
+      return next(CustomError.badRequest("User does not exists"));
     }
 
     return res.status(200).json({
@@ -379,8 +412,8 @@ exports.disableUser = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `User with email: ${user.email} is Disabled`,
-      user
-    })
+      user,
+    });
   } catch (error) {
     return next(error);
   }
@@ -403,8 +436,8 @@ exports.enableUser = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `User with email: ${user.email} is Enabled`,
-      user
-    })
+      user,
+    });
   } catch (error) {
     return next(error);
   }
