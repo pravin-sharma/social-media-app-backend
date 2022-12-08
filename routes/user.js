@@ -28,7 +28,7 @@ router.get("/user", isAuth, getUser);
 router.put("/user", isAuth, updateUser);
 
 // email verification
-router.get("/user/verify/:verificationHash", emailVerification);
+router.post("/user/verify", emailVerification);
 
 // initiate password reset
 router.post("/user/passwordReset", initPasswordReset);
