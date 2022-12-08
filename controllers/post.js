@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const Friend = require("../models/friend");
 const Post = require("../models/post");
 const CustomError = require("../utils/CustomError");
@@ -5,19 +6,26 @@ const CustomError = require("../utils/CustomError");
 // add
 exports.addPost = async (req, res, next) => {
   const userId = req.user.id;
-  const { mediaUrl, caption, visibility } = req.body;
+  const { mediaUrl, mediaType, caption, visibility } = req.body;
 
   if (!mediaUrl && !caption) {
     return next(`Please add a media/caption to post`);
   }
 
   try {
-    const post = await Post.create({
+    let post = await Post.create({
       user: userId,
       mediaUrl,
       caption,
       visibility,
+      mediaType
     });
+
+    post._doc.user = {
+      _id: req.user.id,
+      name: req.user.name,
+      profilePicUrl: req.user.profilePicUrl
+    }
 
     return res.status(200).json({
       success: true,
@@ -29,10 +37,27 @@ exports.addPost = async (req, res, next) => {
   }
 };
 
-// show all
+// show all posts - by userId
+exports.getAllPostsByUserId = async(req,res,next) =>{
+  const userId = req.params.userId;
+
+  try {
+    const posts = await Post.find({user: userId});
+
+    return res.status(200).json({
+      success: true,
+      message: posts.length? 'Posts found':'No posts found',
+      posts
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+// show all - all posts
 exports.getAllPosts = async (req, res, next) => {
   try {
-    const posts = await Post.find({});
+    const posts = await Post.find({}).populate('user', 'name username profilePicUrl').sort({createdAt: -1});
 
     return res.status(200).json({
       success: true,
@@ -227,29 +252,43 @@ exports.trendingPost = async (req, res, next) => {
   try {
     const { friends } = await Friend.findOne({ user: userId });
 
-    // const posts = await Post.find({
-    //   user: { $in: [userId, ...friends.map((friend) => friend.user)] },
-    // })
-    // .limit(4)
-    // .populate("user", "name username profilePicUrl")
-    // .populate('likes.user', 'name username' )
-    // .populate('comments.user', 'name username profilePicUrl')
-
-    // const posts = await Post.aggregate([
-    //   { $match: { "user": { $in: [userId, ...friends.map((friend) => friend.user)] } } },
-    // ]).populate().populate("user", "name username profilePicUrl")
-    // .populate('likes.user', 'name username' )
-    // .populate('comments.user', 'name username profilePicUrl')
-    // .limit(4)
-    
+    const posts = await Post.aggregate([
+      {
+        $match: {
+          user: { $in: [mongoose.Types.ObjectId(userId), ...friends.map((friend) => friend.user)] },
+        },
+      },
+      {
+        $project: { 
+          user: true,
+          caption: true,
+          mediaUrl: true,
+          visibility: true,
+          isDisabled: true,
+          likes: true,
+          comments: true,
+          createdAt: true,
+          updatedAt: true,
+          likesCount: { $size:"$likes" }
+        }
+      },
+      {
+        $sort: {
+          likesCount: -1
+        }
+      },
+      {
+        $limit: 4
+      }
+    ]);
 
     return res.status(200).json({
       success: true,
-      message: 'Trending posts found',
-      posts
-    })
+      message: "Trending posts found",
+      posts,
+    });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
 };
 
