@@ -1,4 +1,4 @@
-const { addPost, getAllPosts, getOnePost, deletePost, likePost, addComment, removeComment, updateComment, trendingPost } = require('../controllers/post');
+const { addPost, getAllPosts, getOnePost, deletePost, likePost, addComment, removeComment, updateComment, trendingPost, getAllPostsByUserId } = require('../controllers/post');
 const { isAuth } = require('../middleware/isAuth');
 
 const router = require('express').Router();
@@ -12,8 +12,11 @@ router.get('/post/all', isAuth, getAllPosts);
 //trending posts
 router.get('/post/trending', isAuth, trendingPost);
 
-// get post by id
+// get post by post id
 router.get('/post/:postId', isAuth, getOnePost);
+
+// get all posts of a user by user id
+router.get('/post/all/:userId', isAuth, getAllPostsByUserId)
 
 // delete post by id
 router.delete('/post/:postId', isAuth, deletePost);
