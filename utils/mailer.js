@@ -18,16 +18,14 @@ const mailer = async (options) => {
   if (options.type == "emailVerification") {
     //Send mail to user for email verification
     mailOptions = {
-      from: `Socializer Admin <${process.env.emailFrom}>`, //admin
+      from: `JellUp Admin <${process.env.emailFrom}>`, //admin
       to: `${options.user.email}`, //user
       subject: "Email Address Verification",
       html: `<html>
         <body>
-        <h1>Your account is successfully registered, In order to proceed further you need to click on the link next to verify email :</h1>
-        <pre>
-        <a href="${options.approvalUrl}">Verify Email</a>
-        <a href="${options.rejectionUrl}">Cancel Verification</a>
-        </pre>
+        <h1>Your account is successfully registered, In order to proceed further you need to go to "Email Verification" page and enter the "Verification Code"</h1>
+        <a href="${options.baseUrl}/email-verification">Email Verification URL</a>
+        Verification Code: ${options.user.verificationToken}
         </body>
         </html>`,
     };
@@ -36,16 +34,14 @@ const mailer = async (options) => {
   if (options.type == "initPasswordReset") {
     //Send mail to user for email verification
     mailOptions = {
-      from: `Socializer Admin <${process.env.emailFrom}>`, //admin
+      from: `JellUp Admin <${process.env.emailFrom}>`, //admin
       to: `${options.user.email}`, //user
       subject: "Password Reset",
       html: `<html>
         <body>
         <h1>We have received a password reset request for your email, Kindly visit the Password Reset URL and enter this code:</h1>
-        <pre>
         <a href="${options.passwordResetUrl}">Password Reset URL</a>
         <p>Password Reset Code: ${options.user.resetPasswordToken}</p>
-        </pre>
         </body>
         </html>`,
     };
