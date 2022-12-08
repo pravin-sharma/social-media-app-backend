@@ -10,7 +10,7 @@ const { default: mongoose } = require("mongoose");
 //sign up
 //TODO: send verification mail to user on sign up
 exports.signUp = async (req, res, next) => {
-  const { name, username, email, password } = req.body;
+  const { name, username, email, password, baseUrl } = req.body;
 
   if (!name || !username || !email || !password)
     return next(CustomError.badRequest("Please provide all the fields"));
@@ -54,7 +54,7 @@ exports.signUp = async (req, res, next) => {
     });
 
     //send email verification mail to the user
-    mailer({ type: "emailVerification", user });
+    mailer({ type: "emailVerification", user, baseUrl });
 
     return res.status(200).json({
       success: true,
@@ -234,14 +234,14 @@ exports.getUserById = async (req, res, next) => {
 
 //email verification
 exports.emailVerification = async (req, res, next) => {
-  const verificationHash = req.params.verificationHash;
+  const {verificationCode } = req.body
 
-  if (!verificationHash) {
+  if (!verificationCode) {
     return next(CustomError.badRequest("Invalid Email Verification Token"));
   }
 
   try {
-    const user = await User.findOne({ verificationToken: verificationHash });
+    const user = await User.findOne({ verificationToken: verificationCode });
 
     if (!user) {
       return next(CustomError.unauthorized("Invalid Email Verification Token"));
@@ -262,7 +262,7 @@ exports.emailVerification = async (req, res, next) => {
 
 //initiate password reset
 //input: email
-//output: password reset token and // TODO: page url for resetting password
+//output: password reset token and page url for resetting password
 exports.initPasswordReset = async (req, res, next) => {
   const { email, passwordResetUrl } = req.body;
 
@@ -286,7 +286,6 @@ exports.initPasswordReset = async (req, res, next) => {
 
     await user.save();
 
-    // TODO: passwordResetUrl will come from front-end
     await mailer({ type: "initPasswordReset", user, passwordResetUrl });
 
     return res.status(200).json({
@@ -327,7 +326,7 @@ exports.perfPasswordReset = async (req, res, next) => {
     let currentTime = new Date().getTime();
     if (tokenExpiryTime < currentTime) {
       return next(
-        CustomError.badRequest("Password Reset Token expired. Try Again")
+        CustomError.badRequest("Password Reset Token expired. Please Try Again")
       );
     }
 
