@@ -9,7 +9,7 @@ exports.addPost = async (req, res, next) => {
   const { mediaUrl, mediaType, caption, visibility } = req.body;
 
   if (!mediaUrl && !caption) {
-    return next(`Please add a media/caption to post`);
+    return next(CustomError.badRequest(`Please add a media/caption to post`));
   }
 
   try {
@@ -18,14 +18,14 @@ exports.addPost = async (req, res, next) => {
       mediaUrl,
       caption,
       visibility,
-      mediaType
+      mediaType,
     });
 
     post._doc.user = {
       _id: req.user.id,
       name: req.user.name,
-      profilePicUrl: req.user.profilePicUrl
-    }
+      profilePicUrl: req.user.profilePicUrl,
+    };
 
     return res.status(200).json({
       success: true,
@@ -38,26 +38,30 @@ exports.addPost = async (req, res, next) => {
 };
 
 // show all posts - by userId
-exports.getAllPostsByUserId = async(req,res,next) =>{
+exports.getAllPostsByUserId = async (req, res, next) => {
   const userId = req.params.userId;
 
   try {
-    const posts = await Post.find({user: userId});
+    const posts = await Post.find({ user: userId })
+      .populate("user likes.user comments.user", "name profilePicUrl")
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
-      message: posts.length? 'Posts found':'No posts found',
-      posts
-    })
+      message: posts.length > 0 ? "Posts Found" : "No Posts Found",
+      posts,
+    });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 // show all - all posts
 exports.getAllPosts = async (req, res, next) => {
   try {
-    const posts = await Post.find({}).populate('user', 'name username profilePicUrl').sort({createdAt: -1});
+    const posts = await Post.find({})
+      .populate("user likes.user comments.user", "name profilePicUrl")
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -116,7 +120,10 @@ exports.likePost = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    let post = await Post.findById(postId).populate("likes.user");
+    let post = await Post.findById(postId).populate(
+      "likes.user",
+      "name profilePicUrl"
+    );
 
     if (!post) {
       return next(CustomError.badRequest(`No such post found`));
@@ -134,16 +141,24 @@ exports.likePost = async (req, res, next) => {
       );
     } else {
       //add like
-      post.likes.push({ user: userId });
+      post.likes.push({
+        user: userId,
+      });
     }
 
     //save
     post = await post.save();
 
+    //get all likes again
+    post = await Post.findById(postId).populate(
+      "likes.user",
+      "name profilePicUrl"
+    );
+
     return res.status(200).json({
       success: true,
       message: `${isLiked ? "Post Disliked" : "Post Liked"}`,
-      post,
+      likes: post.likes,
     });
   } catch (error) {
     return next(error);
@@ -167,14 +182,29 @@ exports.addComment = async (req, res, next) => {
       return next(CustomError.badRequest(`No such post found`));
     }
 
-    post.comments.push({ user: userId, text });
+    //comment
+    let comment = {
+      _id: mongoose.Types.ObjectId(),
+      user: userId,
+      text,
+      date: new Date(),
+    };
+
+    post.comments.push(comment);
 
     post = await post.save();
+
+    //adding user info to the comment doc
+    comment.user = {
+      _id: userId,
+      name: req.user.name,
+      profilePicUrl: req.user.profilePicUrl,
+    };
 
     return res.status(200).json({
       success: true,
       message: "Comment added",
-      post,
+      comment,
     });
   } catch (error) {
     return next(error);
@@ -203,7 +233,6 @@ exports.removeComment = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `Comment removed`,
-      post,
     });
   } catch (error) {
     return next(error);
@@ -255,11 +284,16 @@ exports.trendingPost = async (req, res, next) => {
     const posts = await Post.aggregate([
       {
         $match: {
-          user: { $in: [mongoose.Types.ObjectId(userId), ...friends.map((friend) => friend.user)] },
+          user: {
+            $in: [
+              mongoose.Types.ObjectId(userId),
+              ...friends.map((friend) => friend.user),
+            ],
+          },
         },
       },
       {
-        $project: { 
+        $project: {
           user: true,
           caption: true,
           mediaUrl: true,
@@ -269,17 +303,17 @@ exports.trendingPost = async (req, res, next) => {
           comments: true,
           createdAt: true,
           updatedAt: true,
-          likesCount: { $size:"$likes" }
-        }
+          likesCount: { $size: "$likes" },
+        },
       },
       {
         $sort: {
-          likesCount: -1
-        }
+          likesCount: -1,
+        },
       },
       {
-        $limit: 4
-      }
+        $limit: 4,
+      },
     ]);
 
     return res.status(200).json({
