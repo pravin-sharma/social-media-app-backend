@@ -39,7 +39,7 @@ router.post("/user/passwordResetPerform", perfPasswordReset);
 // view all users except admin
 router.get("/user/all", isAuth, getAllUser);
 
-// get a user by id
+// get a user by id - user profile data
 router.get("/user/:userId", isAuth, getUserById);
 
 //admin
