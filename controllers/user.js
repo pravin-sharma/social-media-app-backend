@@ -132,13 +132,14 @@ exports.login = async (req, res, next) => {
       success: true,
       message: `Login Successful for Email: ${email}`,
       token,
+      loggedInUserId: user._id
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// get user - self
+// get logged in user
 exports.getUser = async (req, res, next) => {
   const userId = req.user.id;
 
@@ -203,7 +204,7 @@ exports.updateUser = async (req, res, next) => {
   }
 };
 
-// get user - by id
+// get user profile - by id
 exports.getUserById = async (req, res, next) => {
   const userId = req.params.userId;
 
@@ -212,15 +213,15 @@ exports.getUserById = async (req, res, next) => {
   }
 
   try {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId, 'name email username profilePicUrl createdAt');
+
+    //TODO: integrate profile model: user bio, dob, gender, workplace, Education
 
     if (!user) {
       return next(
         CustomError.badRequest("User with provided ID does not exists")
       );
     }
-
-    user.password = undefined;
 
     return res.status(200).json({
       success: true,
