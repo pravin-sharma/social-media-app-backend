@@ -171,20 +171,26 @@ exports.getUser = async (req, res, next) => {
 exports.updateUser = async (req, res, next) => {
   const userId = req.user.id;
 
+  const updatePayload = {
+    profilePicUrl: req.body.profilePicUrl,
+    name: req.body.name,
+    username: req.body.username?.toLowerCase(),
+    email: req.body.email?.toLowerCase(),
+    password: req.body.password || undefined,
+  }
+
   try {
     const user = await User.findByIdAndUpdate(
       userId,
-      {
-        name: req.body.name,
-        username: req.body.username?.toLowerCase(),
-        email: req.body.email?.toLowerCase(),
-        password: req.body.password,
-      },
+      updatePayload,
       {
         new: true,
         runValidators: true,
+        fields: "name email username profilePicUrl createdAt",
       }
     );
+
+    
 
     res.status(200).json({
       success: true,
