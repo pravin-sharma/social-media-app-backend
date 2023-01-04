@@ -13,13 +13,17 @@ const {
   deleteUser,
   disableUser,
   enableUser,
-  getUserById
+  getUserById,
+  searchUser
 } = require("../controllers/user");
 const { isAdmin } = require("../middleware/isAdmin");
 const { isAuth } = require("../middleware/isAuth");
 
 router.post("/signup", signUp);
 router.post("/login", login);
+
+//search user
+router.get('/user/search', isAuth, searchUser);
 
 //Get Logged In User
 router.get("/user", isAuth, getUser);
@@ -36,20 +40,19 @@ router.post("/user/passwordReset", initPasswordReset);
 //perform Password Reset
 router.post("/user/passwordResetPerform", perfPasswordReset);
 
-// view all users except admin
-router.get("/user/all", isAuth, getAllUser);
+// admin - view all users except admin
+router.get("/user/all", isAuth, isAdmin, getAllUser);
 
 // get a user by id - user profile data
 router.get("/user/:userId", isAuth, getUserById);
 
-//admin
-//delete user
+// admin - delete user
 router.delete("/user/:userId", isAuth, isAdmin, deleteUser);
 
-//disable user
+// admin - disable user
 router.get("/user/disable/:userId", isAuth, isAdmin, disableUser);
 
-//enable user
+//admin - enable user
 router.get("/user/enable/:userId", isAuth, isAdmin, enableUser);
 
 module.exports = router;
