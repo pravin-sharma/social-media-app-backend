@@ -10,6 +10,14 @@ const friendSchema = new mongoose.Schema({
       },
     },
   ],
+  sentFriendRequests:[
+    {
+      user: {
+        type: mongoose.Types.ObjectId,
+        ref: "User",
+      },
+    },
+  ],
   friendRequests: [
     {
       user: {

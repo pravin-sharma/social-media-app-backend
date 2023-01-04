@@ -5,11 +5,13 @@ const Friend = require("../models/friend");
 const mailer = require("../utils/mailer");
 const crypto = require("crypto");
 const { futureDateGenerate } = require("../utils/dateUtil");
+const { default: mongoose } = require("mongoose");
+const { notFound } = require("../utils/CustomError");
 
 //sign up
 //TODO: send verification mail to user on sign up
 exports.signUp = async (req, res, next) => {
-  const { name, username, email, password } = req.body;
+  const { name, username, email, password, baseUrl } = req.body;
 
   if (!name || !username || !email || !password)
     return next(CustomError.badRequest("Please provide all the fields"));
@@ -35,7 +37,7 @@ exports.signUp = async (req, res, next) => {
 
     // create user
     const user = await User.create({
-      name,
+      name: name.toLowerCase(),
       username: username.toLowerCase(),
       email: email.toLowerCase(),
       password,
@@ -53,7 +55,7 @@ exports.signUp = async (req, res, next) => {
     });
 
     //send email verification mail to the user
-    mailer({ type: "emailVerification", user });
+    mailer({ type: "emailVerification", user, baseUrl });
 
     return res.status(200).json({
       success: true,
@@ -131,13 +133,14 @@ exports.login = async (req, res, next) => {
       success: true,
       message: `Login Successful for Email: ${email}`,
       token,
+      loggedInUserId: user._id,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// get user
+// get logged in user
 exports.getUser = async (req, res, next) => {
   const userId = req.user.id;
 
@@ -164,25 +167,49 @@ exports.getUser = async (req, res, next) => {
   }
 };
 
-//update user
+// search user
+exports.searchUser = async (req, res, next) => {
+  const userId = req.user.id;
+  const { text } = req.query;
+  const regex = new RegExp(text, "gi");
+
+  try {
+    let user = await User.find({ name: regex }, "name profilePicUrl isDisabled isVerified").limit(8);
+
+    //filter admin and disabled users
+    user = user?.filter((user) => {
+      return user.name !== "admin" && !user.isDisabled && user.isVerified
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Search result Found",
+      result: user,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+//update user - self
 //TODO: on updating email, change isVerified to false, logout the user and ask user to verify the new email
 exports.updateUser = async (req, res, next) => {
   const userId = req.user.id;
 
+  const updatePayload = {
+    profilePicUrl: req.body.profilePicUrl,
+    name: req.body.name.toLowerCase(),
+    username: req.body.username?.toLowerCase(),
+    email: req.body.email?.toLowerCase(),
+    password: req.body.password || undefined,
+  };
+
   try {
-    const user = await User.findByIdAndUpdate(
-      userId,
-      {
-        name: req.body.name,
-        username: req.body.username?.toLowerCase(),
-        email: req.body.email?.toLowerCase(),
-        password: req.body.password,
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    const user = await User.findByIdAndUpdate(userId, updatePayload, {
+      new: true,
+      runValidators: true,
+      fields: "name email username profilePicUrl createdAt",
+    });
 
     res.status(200).json({
       success: true,
@@ -202,16 +229,48 @@ exports.updateUser = async (req, res, next) => {
   }
 };
 
+// get user profile - by id
+exports.getUserById = async (req, res, next) => {
+  const userId = req.params.userId;
+
+  if (!userId) {
+    return next(CustomError.badRequest("Please provide user id"));
+  }
+
+  try {
+    const user = await User.findById(
+      userId,
+      "name email username profilePicUrl createdAt"
+    );
+
+    //TODO: integrate profile model: user bio, dob, gender, workplace, Education
+
+    if (!user) {
+      return next(
+        CustomError.badRequest("User with provided ID does not exists")
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "User found",
+      user,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 //email verification
 exports.emailVerification = async (req, res, next) => {
-  const verificationHash = req.params.verificationHash;
+  const { verificationCode } = req.body;
 
-  if (!verificationHash) {
+  if (!verificationCode) {
     return next(CustomError.badRequest("Invalid Email Verification Token"));
   }
 
   try {
-    const user = await User.findOne({ verificationToken: verificationHash });
+    const user = await User.findOne({ verificationToken: verificationCode });
 
     if (!user) {
       return next(CustomError.unauthorized("Invalid Email Verification Token"));
@@ -232,7 +291,7 @@ exports.emailVerification = async (req, res, next) => {
 
 //initiate password reset
 //input: email
-//output: password reset token and // TODO: page url for resetting password
+//output: password reset token and page url for resetting password
 exports.initPasswordReset = async (req, res, next) => {
   const { email, passwordResetUrl } = req.body;
 
@@ -256,7 +315,6 @@ exports.initPasswordReset = async (req, res, next) => {
 
     await user.save();
 
-    // TODO: passwordResetUrl will come from front-end
     await mailer({ type: "initPasswordReset", user, passwordResetUrl });
 
     return res.status(200).json({
@@ -297,7 +355,7 @@ exports.perfPasswordReset = async (req, res, next) => {
     let currentTime = new Date().getTime();
     if (tokenExpiryTime < currentTime) {
       return next(
-        CustomError.badRequest("Password Reset Token expired. Try Again")
+        CustomError.badRequest("Password Reset Token expired. Please Try Again")
       );
     }
 
@@ -322,14 +380,16 @@ exports.perfPasswordReset = async (req, res, next) => {
   }
 };
 
-// get all users
-// @Output: all users, except admin
+// Admin - get all users
+// @Output: all users, except admin and self
 exports.getAllUser = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    const users = await User.find({ role: { $ne: "admin" } }).sort({
-      createdAt: -1,
+    const users = await User.find(
+      { _id: { $ne: userId } }, "name profilePicUrl isVerified isDisabled"
+    ).sort({
+      name: 1
     });
 
     return res.status(200).json({
@@ -348,8 +408,8 @@ exports.deleteUser = async (req, res, next) => {
   try {
     const user = await User.findByIdAndDelete(userId);
 
-    if(!user){
-      return next(CustomError.badRequest('User does not exists'))
+    if (!user) {
+      return next(CustomError.badRequest("User does not exists"));
     }
 
     return res.status(200).json({
@@ -376,11 +436,19 @@ exports.disableUser = async (req, res, next) => {
       }
     );
 
+
+
     return res.status(200).json({
       success: true,
       message: `User with email: ${user.email} is Disabled`,
-      user
-    })
+      user: {
+        _id: user._id,
+        name: user.name,
+        profilePicUrl: user.profilePicUrl,
+        isVerified: user.isVerified,
+        isDisabled: user.isDisabled
+      },
+    });
   } catch (error) {
     return next(error);
   }
@@ -403,8 +471,14 @@ exports.enableUser = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `User with email: ${user.email} is Enabled`,
-      user
-    })
+      user:{
+        _id: user._id,
+        name: user.name,
+        profilePicUrl: user.profilePicUrl,
+        isVerified: user.isVerified,
+        isDisabled: user.isDisabled
+      },
+    });
   } catch (error) {
     return next(error);
   }
