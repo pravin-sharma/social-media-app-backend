@@ -105,7 +105,7 @@ exports.withDrawFriendRequest = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: "Withdrawn the friend request",
-      userFromWhichWithdrawFriendRequest
+      userFromWhichWithdrawFriendRequest,
     });
   } catch (error) {
     return next(error);
@@ -150,10 +150,10 @@ exports.acceptFriendRequest = async (req, res, next) => {
     friend.friends.push({ user: userId });
 
     // remove for requester's sent friend request list
-    friend.sentFriendRequests = friend.sentFriendRequests.filter(request => {
-      console.log(request)
-      return request.user != userId
-    })
+    friend.sentFriendRequests = friend.sentFriendRequests.filter((request) => {
+      console.log(request);
+      return request.user != userId;
+    });
 
     await friend.save();
 
@@ -201,19 +201,19 @@ exports.declineFriendRequest = async (req, res, next) => {
     }
 
     // remove request from logged user's friend request list
-    friend.friendRequests = friend.friendRequests.filter(
-      (f) => f.user != from
-    );
+    friend.friendRequests = friend.friendRequests.filter((f) => f.user != from);
     await friend.save();
 
     // remove request from other user's sent friend request list
-    friend = await Friend.findOne({user: from})
-    friend.sentFriendRequests = friend.sentFriendRequests.filter(request => request.user != userId)
+    friend = await Friend.findOne({ user: from });
+    friend.sentFriendRequests = friend.sentFriendRequests.filter(
+      (request) => request.user != userId
+    );
     await friend.save();
 
     return res.status(200).json({
       success: true,
-      message: "Request Declined"
+      message: "Request Declined",
     });
   } catch (error) {
     return next(error);
@@ -266,10 +266,13 @@ exports.getAllFriendRequests = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    const { friendRequests } = await Friend.findOne(
+    let { friendRequests } = await Friend.findOne(
       { user: userId },
       { friendRequests: 1 }
-    ).populate("friendRequests.user", "_id name email username profilePicUrl");
+    ).populate("friendRequests.user", "_id name profilePicUrl isDisabled");
+
+    //filter delete users
+    friendRequests = friendRequests.filter((request) => (request.user != null && !request.user?.isDisabled));
 
     return res.status(200).json({
       success: true,
@@ -283,15 +286,17 @@ exports.getAllFriendRequests = async (req, res, next) => {
   }
 };
 
-// get all friends
+// get all friends - logged in user - not being used
 exports.getAllFriends = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    const { friends } = await Friend.findOne(
+    let { friends } = await Friend.findOne(
       { user: userId },
       { friends: 1 }
     ).populate("friends.user", "_id name username email profilePicUrl");
+
+    friends = friends.filter((friend) => friend.user != null);
 
     return res.status(200).json({
       success: true,
@@ -303,16 +308,18 @@ exports.getAllFriends = async (req, res, next) => {
   }
 };
 
-
-// get all friends - by user id
+// get all friends - by user id - other user
 exports.getAllFriendsById = async (req, res, next) => {
   const userId = req.params.id;
 
   try {
-    const { friends } = await Friend.findOne(
+    let { friends } = await Friend.findOne(
       { user: userId },
       { friends: 1 }
-    ).populate("friends.user", "_id name username email profilePicUrl");
+    ).populate("friends.user", "_id name profilePicUrl isDisabled");
+
+    // filter deleted and disabled users
+    friends = friends.filter((friend) => (friend.user != null && !friend.user?.isDisabled));
 
     return res.status(200).json({
       success: true,
@@ -324,19 +331,25 @@ exports.getAllFriendsById = async (req, res, next) => {
   }
 };
 
-// get all friends
+// get all sent friend requests
 exports.getSentRequests = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    const { sentFriendRequests } = await Friend.findOne(
+    let { sentFriendRequests } = await Friend.findOne(
       { user: userId },
       { sentFriendRequests: 1 }
     ).populate("sentFriendRequests.user", "name username email profilePicUrl");
 
+    sentFriendRequests = sentFriendRequests.filter(
+      (request) => request.user != null
+    );
+
     return res.status(200).json({
       success: true,
-      message: sentFriendRequests.length ? "Sent Friend Requests Found" : "No Friend Requests Sent",
+      message: sentFriendRequests.length
+        ? "Sent Friend Requests Found"
+        : "No Friend Requests Sent",
       sentFriendRequests,
     });
   } catch (error) {

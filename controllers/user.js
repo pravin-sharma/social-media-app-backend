@@ -6,6 +6,7 @@ const mailer = require("../utils/mailer");
 const crypto = require("crypto");
 const { futureDateGenerate } = require("../utils/dateUtil");
 const { default: mongoose } = require("mongoose");
+const { notFound } = require("../utils/CustomError");
 
 //sign up
 //TODO: send verification mail to user on sign up
@@ -36,7 +37,7 @@ exports.signUp = async (req, res, next) => {
 
     // create user
     const user = await User.create({
-      name,
+      name: name.toLowerCase(),
       username: username.toLowerCase(),
       email: email.toLowerCase(),
       password,
@@ -132,7 +133,7 @@ exports.login = async (req, res, next) => {
       success: true,
       message: `Login Successful for Email: ${email}`,
       token,
-      loggedInUserId: user._id
+      loggedInUserId: user._id,
     });
   } catch (error) {
     return next(error);
@@ -166,6 +167,30 @@ exports.getUser = async (req, res, next) => {
   }
 };
 
+// search user
+exports.searchUser = async (req, res, next) => {
+  const userId = req.user.id;
+  const { text } = req.query;
+  const regex = new RegExp(text, "gi");
+
+  try {
+    let user = await User.find({ name: regex }, "name profilePicUrl isDisabled isVerified").limit(8);
+
+    //filter admin and disabled users
+    user = user?.filter((user) => {
+      return user.name !== "admin" && !user.isDisabled && user.isVerified
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Search result Found",
+      result: user,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 //update user - self
 //TODO: on updating email, change isVerified to false, logout the user and ask user to verify the new email
 exports.updateUser = async (req, res, next) => {
@@ -173,24 +198,18 @@ exports.updateUser = async (req, res, next) => {
 
   const updatePayload = {
     profilePicUrl: req.body.profilePicUrl,
-    name: req.body.name,
+    name: req.body.name.toLowerCase(),
     username: req.body.username?.toLowerCase(),
     email: req.body.email?.toLowerCase(),
     password: req.body.password || undefined,
-  }
+  };
 
   try {
-    const user = await User.findByIdAndUpdate(
-      userId,
-      updatePayload,
-      {
-        new: true,
-        runValidators: true,
-        fields: "name email username profilePicUrl createdAt",
-      }
-    );
-
-    
+    const user = await User.findByIdAndUpdate(userId, updatePayload, {
+      new: true,
+      runValidators: true,
+      fields: "name email username profilePicUrl createdAt",
+    });
 
     res.status(200).json({
       success: true,
@@ -219,7 +238,10 @@ exports.getUserById = async (req, res, next) => {
   }
 
   try {
-    const user = await User.findById(userId, 'name email username profilePicUrl createdAt');
+    const user = await User.findById(
+      userId,
+      "name email username profilePicUrl createdAt"
+    );
 
     //TODO: integrate profile model: user bio, dob, gender, workplace, Education
 
@@ -241,7 +263,7 @@ exports.getUserById = async (req, res, next) => {
 
 //email verification
 exports.emailVerification = async (req, res, next) => {
-  const {verificationCode } = req.body
+  const { verificationCode } = req.body;
 
   if (!verificationCode) {
     return next(CustomError.badRequest("Invalid Email Verification Token"));
@@ -358,17 +380,16 @@ exports.perfPasswordReset = async (req, res, next) => {
   }
 };
 
-// get all users
+// Admin - get all users
 // @Output: all users, except admin and self
 exports.getAllUser = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
     const users = await User.find(
-      { role: { $ne: "admin" }, _id: { $ne: userId } },
-      { name: 1, email: 1, username: 1, profilePicUrl: 1 }
+      { _id: { $ne: userId } }, "name profilePicUrl isVerified isDisabled"
     ).sort({
-      createdAt: -1,
+      name: 1
     });
 
     return res.status(200).json({
@@ -415,10 +436,18 @@ exports.disableUser = async (req, res, next) => {
       }
     );
 
+
+
     return res.status(200).json({
       success: true,
       message: `User with email: ${user.email} is Disabled`,
-      user,
+      user: {
+        _id: user._id,
+        name: user.name,
+        profilePicUrl: user.profilePicUrl,
+        isVerified: user.isVerified,
+        isDisabled: user.isDisabled
+      },
     });
   } catch (error) {
     return next(error);
@@ -442,7 +471,13 @@ exports.enableUser = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `User with email: ${user.email} is Enabled`,
-      user,
+      user:{
+        _id: user._id,
+        name: user.name,
+        profilePicUrl: user.profilePicUrl,
+        isVerified: user.isVerified,
+        isDisabled: user.isDisabled
+      },
     });
   } catch (error) {
     return next(error);
