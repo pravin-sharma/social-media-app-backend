@@ -21,7 +21,7 @@ router.delete('/friend/remove/:friendId', isAuth, removeFriend)
 // get all pending friend requests
 router.get('/friend/requests', isAuth, getAllFriendRequests)
 
-// get all friends
+// get all friends - not being user
 router.get('/friend/all', isAuth, getAllFriends)
 
 // get all friends by id
